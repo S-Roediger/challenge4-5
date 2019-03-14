@@ -1,0 +1,19 @@
+package lpm;
+
+import java.util.List;
+
+public class Helper {
+
+	
+	public void addRoutes(int ip, byte prefixlength, int portnr) {
+		
+	}
+	
+	public List<Integer> selectCorrectSubset(int ip) {
+    	ips.add(ip);
+    	prefixLengths.add(prefixLength);
+    	portNumbers.add(portNumber);
+	}
+	
+	
+}
