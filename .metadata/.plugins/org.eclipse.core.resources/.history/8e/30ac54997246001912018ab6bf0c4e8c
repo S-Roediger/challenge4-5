@@ -96,8 +96,8 @@ public class MyRoutingProtocol implements IRoutingProtocol {
             }
             
             if (dtReceive.getNRows() > neighbour) { //update RoutingTable met gegevens van 
-            	for (int g = 1; g < dtReceive.getNColumns(); g++) {
-                	int costsNeigh = dtReceive.get(neighbour, g);
+            	for (int g = 1; g < dtSend.getNColumns(); g++) {
+                	int costsNeigh = dtSend.get(neighbour, g);
                 	
                 	if (myRoutingTable.containsKey(g)) {
                 		if (myRoutingTable.get(g).cost > costsNeigh) {

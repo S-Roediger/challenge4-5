@@ -25,7 +25,7 @@ public class MyRoutingProtocol implements IRoutingProtocol {
 
     // You can use this data structure to store your routing table.
     private HashMap<Integer, MyRoute> myRoutingTable = new HashMap<>();
-    
+    private DataTable dtSend = new DataTable(7);
     @Override
     public void init(LinkLayer linkLayer) {
         this.linkLayer = linkLayer;
@@ -36,26 +36,23 @@ public class MyRoutingProtocol implements IRoutingProtocol {
     public void tick(PacketWithLinkCost[] packetsWithLinkCosts) {
         // Get the address of this node
         int myAddress = this.linkLayer.getOwnAddress();
-        DataTable dtSend = new DataTable(7);
+
+        int currentNeigh = 0;
+        int currentDest = 0;
+        int currentLinkCost = 0;
         System.out.println("tick; received " + packetsWithLinkCosts.length + " packets");
         int i;
 
         
 
-        if (packetsWithLinkCosts.length == 0) {
-            System.out.println("geen packets, broadcast");
-            Packet pkt = new Packet(myAddress, 0, dtSend);
-            this.linkLayer.transmit(pkt);
-          }
-        
         
         // first process the incoming packets; loop over them:
         for (i = 0; i < packetsWithLinkCosts.length; i++) {
             Packet packet = packetsWithLinkCosts[i].getPacket();
             int neighbour = packet.getSourceAddress();             // from whom is the packet?
-          
+            currentNeigh = neighbour;
             int linkcost = packetsWithLinkCosts[i].getLinkCost();  // what's the link cost from/to this neighbour?
-        
+            currentLinkCost = linkcost;
             DataTable dtReceive = packet.getDataTable();                  // other data contained in the packet
             
            
@@ -69,81 +66,92 @@ public class MyRoutingProtocol implements IRoutingProtocol {
       
             int dest = packet.getDestinationAddress();
 
-       
+            currentDest = dest;
             
             
-            if (myRoutingTable.containsKey(neighbour)) { //als deze al in routingtable is dan update
+            if (myRoutingTable.containsKey(dest)) { //als deze al in routingtable is dan update
  
-                MyRoute r1 = myRoutingTable.get(neighbour); //update
+            	
+                int costDestinationToNeighbour = dtReceive.get(neighbour,dest);
+                int costDestinationMe = linkcost + costDestinationToNeighbour;
+                MyRoute r1 = myRoutingTable.get(dest); //update
                 
-                if (r1.cost > linkcost) { //update alleen als de score beter is
+                if (r1.cost > costDestinationMe) { //update alleen als de score beter is
                 	
-                	myRoutingTable.remove(neighbour);
+                	myRoutingTable.remove(dest);
                 	
-                	MyRoute r = new MyRoute();
-                    r.cost = linkcost;
-                    r.nextHop = neighbour;
-                    myRoutingTable.put(neighbour, r);
+                    r1.cost = costDestinationMe;
+                    r1.nextHop = dest;
+                    myRoutingTable.put(dest, r1);
                     
                 }
-              } else { //maak nieuw als ie er nog niet in zit
-            	  
-            	  MyRoute r2 = new MyRoute();
-	              r2.nextHop = neighbour;
-	              r2.cost = linkcost;
-	              myRoutingTable.put(neighbour, r2);
+                    
+                
+            } else if (dest < 7 && dest > 0){ //anders new
+            	
+            	
+                MyRoute r1 = new MyRoute();
+                r1.nextHop = neighbour;
+                r1.cost = linkcost;
+                myRoutingTable.put(dest, r1);
+                
+                
+            } else {
+            	
+                MyRoute r1 = new MyRoute();
+                r1.nextHop = neighbour;
+                r1.cost = linkcost;
+                myRoutingTable.put(neighbour, r1);
                 
             }
             
-            if (dtReceive.getNRows() > neighbour) { //update RoutingTable met gegevens van 
-            	for (int g = 1; g < dtReceive.getNColumns(); g++) {
-                	int costsNeigh = dtReceive.get(neighbour, g);
-                	
-                	if (myRoutingTable.containsKey(g)) {
-                		if (myRoutingTable.get(g).cost > costsNeigh) {
-                			myRoutingTable.get(g).cost = costsNeigh + linkcost;
-                			myRoutingTable.get(g).nextHop = neighbour;
-                		}
-                	} else {
-                		MyRoute r = new MyRoute();
-                		r.cost = costsNeigh+linkcost;
-                		r.nextHop = neighbour;
-                		myRoutingTable.put(g, r);
-                	}
-            	}
-            }
-            
-            if (myRoutingTable.containsKey(myAddress)) {
-            	myRoutingTable.remove(myAddress);
-            }
-            
-            //Making table met initieel waardes van 100
+            //Making table?
             if (dtReceive.getNRows()==0) {
                 System.out.println("dtReceive empty");
                 Integer[] empty = {100,100,100,100,100,100,100};
                 while (dtSend.getNRows()!=7) {
                   dtSend.addRow(empty);
                 }
-              } else { //anders neem wat je eerder kreeg toegestuurd
+              } else {
                 dtSend = dtReceive;
                 System.out.println("replace sendDT to receivedDT");
               }
-            
-            Set<Integer> k = myRoutingTable.keySet();
-            
-            for (Integer n:k) {
-            	dtSend.set(myAddress, n, myRoutingTable.get(n).cost); //update dtSend met je eigen kennis 	    	
-            }
-            
-            
-            if (myRoutingTable.containsKey(dest)) {
-         	   MyRoute r = myRoutingTable.get(dest);
-         	   
-                Packet pkt = new Packet(myAddress, r.nextHop, dtSend);
-                this.linkLayer.transmit(pkt);
-            }
-            
         }
+
+        if (myRoutingTable.containsKey(myAddress)) {
+        	myRoutingTable.remove(myAddress);
+        }
+        
+        Set<Integer> k = myRoutingTable.keySet();
+        System.out.println("RT "+myRoutingTable);
+        System.out.println("Keys "+k);
+        
+        for (Integer n:k) {
+        	dtSend.set(myAddress, n, myRoutingTable.get(n).cost); //update dtSend met je eigen kennis 	
+        	System.out.println(n +" toegevoegd");
+        	
+        }
+        
+        if (dtSend.getNRows() > currentNeigh) {
+        	for (int g = 1; g < dtSend.getNColumns(); g++) {
+            	int costsNeigh = dtSend.get(currentNeigh, g);
+            	int costsMe = dtSend.get(myAddress, g);
+            	if ((costsNeigh + currentLinkCost) < costsMe) {
+            		dtSend.set(myAddress, currentNeigh, (costsNeigh+currentLinkCost));
+            	}
+        		
+
+        	}
+        }
+
+       if (myRoutingTable.containsKey(currentDest)) {
+    	   MyRoute r = myRoutingTable.get(currentDest);
+    	   
+           Packet pkt = new Packet(myAddress, r.nextHop, dtSend); //dest was 0
+           this.linkLayer.transmit(pkt);
+       }
+
+
         
         Packet pktt = new Packet(myAddress, 0, dtSend); //dest was 0
         this.linkLayer.transmit(pktt);
