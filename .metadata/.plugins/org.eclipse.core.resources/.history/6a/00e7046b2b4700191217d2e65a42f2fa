@@ -1,0 +1,173 @@
+package my_protocol;
+
+import framework.*;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * @version 12-03-2019
+ *
+ * Copyright University of Twente, 2013-2019
+ *
+ **************************************************************************
+ *                            Copyright notice                            *
+ *                                                                        *
+ *             This file may ONLY be distributed UNMODIFIED.              *
+ * In particular, a correct solution to the challenge must NOT be posted  *
+ * in public places, to preserve the learning effect for future students. *
+ **************************************************************************
+ */
+public class MyRoutingProtocol implements IRoutingProtocol {
+    private LinkLayer linkLayer;
+
+    // You can use this data structure to store your routing table.
+    private HashMap<Integer, MyRoute> myRoutingTable = new HashMap<>();
+    
+    @Override
+    public void init(LinkLayer linkLayer) {
+        this.linkLayer = linkLayer;
+    }
+
+
+    @Override
+    public void tick(PacketWithLinkCost[] packetsWithLinkCosts) {
+        // Get the address of this node
+        int myAddress = this.linkLayer.getOwnAddress();
+        DataTable dtSend = new DataTable(7);
+        System.out.println("tick; received " + packetsWithLinkCosts.length + " packets");
+        int i;
+
+        
+
+        if (packetsWithLinkCosts.length == 0) {
+            System.out.println("GEEN PACKETS BROADCAST");
+            Packet pkt = new Packet(myAddress, 0, dtSend);
+            this.linkLayer.transmit(pkt);
+          }
+        
+        
+        // first process the incoming packets; loop over them:
+        for (i = 0; i < packetsWithLinkCosts.length; i++) {
+            Packet packet = packetsWithLinkCosts[i].getPacket();
+            int neighbour = packet.getSourceAddress();             // from whom is the packet?
+          
+            int linkcost = packetsWithLinkCosts[i].getLinkCost();  // what's the link cost from/to this neighbour?
+        
+            DataTable dtReceive = packet.getDataTable();                  // other data contained in the packet
+            
+           
+
+            
+            System.out.printf("received packet from %d with %d rows and %d columns of data%n", neighbour, dtReceive.getNRows(), dtReceive.getNColumns());
+  
+            // you'll probably want to process the data, update your data structures (myRoutingTable) , etc....
+
+            // reading one cell from the DataTable can be done using the  dt.get(row,column)  method
+                
+            if (myRoutingTable.containsKey(neighbour)) { //als deze al in routingtable is dan update
+ 
+                MyRoute r1 = myRoutingTable.get(neighbour); //update
+                
+                if (r1.cost != linkcost) { //update alleen als de score anders is
+                	
+                	myRoutingTable.remove(neighbour);
+                	
+                	MyRoute r = new MyRoute();
+                    r.cost = linkcost;
+                    r.nextHop = neighbour;
+                    myRoutingTable.put(neighbour, r);
+                    
+                }
+              } else { //maak nieuw als ie er nog niet in zit
+            	  
+            	  MyRoute r2 = new MyRoute();
+	              r2.nextHop = neighbour;
+	              r2.cost = linkcost;
+	              myRoutingTable.put(neighbour, r2);
+                
+            }
+            
+            if (dtReceive.getNRows() > neighbour) { //update RoutingTable met gegevens van 
+            	for (int g = 1; g < dtReceive.getNColumns(); g++) {
+                	int costsNeigh = dtReceive.get(neighbour, g);
+                	
+                	if (myRoutingTable.containsKey(g)) {
+                		if (myRoutingTable.get(g).cost > costsNeigh + linkcost) { //+ linkcost
+                			myRoutingTable.get(g).cost = costsNeigh + linkcost;
+                			myRoutingTable.get(g).nextHop = neighbour;
+                		}
+                	} else { //je geeft neighb als next hop terwijl je zelf zou moeten zijn
+                		MyRoute r = new MyRoute();
+                		if (costsNeigh > 0) { // is dit wel nodig??
+                    		r.cost = costsNeigh+linkcost;
+                    		r.nextHop = neighbour;
+                    		myRoutingTable.put(g, r);
+                		}
+
+                	}
+            	}
+            }
+            
+            if (myRoutingTable.containsKey(myAddress)) {
+            	myRoutingTable.remove(myAddress); //toevoegen next hop jezelf + cost 0
+            }
+            
+            //Making table met initieel waardes van 100
+            if (dtReceive.getNRows()==0) {
+                System.out.println("dtReceive empty");
+                Integer[] empty = {100,100,100,100,100,100,100};
+                while (dtSend.getNRows()!=7) {
+                  dtSend.addRow(empty);
+                }
+              } else { //anders neem wat je eerder kreeg toegestuurd
+                dtSend = dtReceive;
+                System.out.println("replace sendDT to receivedDT");
+              }
+            
+            Set<Integer> k = myRoutingTable.keySet();
+            
+            for (Integer n:k) {
+            	dtSend.set(myAddress, n, myRoutingTable.get(n).cost); //update dtSend met je eigen kennis 	    	
+            }
+            
+        }
+        
+        Packet pktt = new Packet(myAddress, 0, dtSend); //dest was 0
+        this.linkLayer.transmit(pktt);
+        // and send out one (or more, if you want) distance vector packets
+        // the actual distance vector data must be stored in the DataTable structure
+        //DataTable dt = new DataTable(6);   // the 6 is the number of columns, you can change this
+        
+        // you'll probably want to put some useful information into dt here
+        // by using the  dt.set(row, column, value)  method.
+
+        // next, actually send out the packet, with our own address as the source address
+        // and 0 as the destination address: that's a broadcast to be received by all neighbours.
+//        Packet pkt = new Packet(myAddress, 0, dt);
+//        this.linkLayer.transmit(pkt);
+
+        /*
+        Instead of using Packet with a DataTable you may also use Packet with
+        a byte[] as data part, if you really want to send your own data structure yourself.
+        Read the JavaDoc of Packet to see how you can do this.
+        PLEASE NOTE! Although we provide this option we do not support it.
+        */
+    }
+
+    public Map<Integer, Integer> getForwardingTable() {
+        // This code extracts from your routing table the forwarding table.
+        // The result of this method is send to the server to validate and score your protocol.
+
+        // <Destination, NextHop>
+        HashMap<Integer, Integer> ft = new HashMap<>();
+
+        for (Map.Entry<Integer, MyRoute> entry : myRoutingTable.entrySet()) {
+            ft.put(entry.getKey(), entry.getValue().nextHop);
+        }
+
+        return ft;
+    }
+}

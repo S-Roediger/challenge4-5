@@ -25,16 +25,23 @@ public class MyRoutingProtocol implements IRoutingProtocol {
 
     // You can use this data structure to store your routing table.
     private HashMap<Integer, MyRoute> myRoutingTable = new HashMap<>();
+    private int TTL;
+    
     
     @Override
     public void init(LinkLayer linkLayer) {
         this.linkLayer = linkLayer;
+        TTL = 0;
     }
 
 
     @Override
     public void tick(PacketWithLinkCost[] packetsWithLinkCosts) {
         // Get the address of this node
+    	TTL++;
+    	if ((TTL % 1) == 0) {
+    		myRoutingTable = new HashMap<>();
+    	}
         int myAddress = this.linkLayer.getOwnAddress();
         DataTable dtSend = new DataTable(7);
         System.out.println("tick; received " + packetsWithLinkCosts.length + " packets");
@@ -43,7 +50,7 @@ public class MyRoutingProtocol implements IRoutingProtocol {
         
 
         if (packetsWithLinkCosts.length == 0) {
-            System.out.println("geen packets, broadcast");
+            System.out.println("GEEN PACKETS BROADCAST");
             Packet pkt = new Packet(myAddress, 0, dtSend);
             this.linkLayer.transmit(pkt);
           }
@@ -66,12 +73,7 @@ public class MyRoutingProtocol implements IRoutingProtocol {
             // you'll probably want to process the data, update your data structures (myRoutingTable) , etc....
 
             // reading one cell from the DataTable can be done using the  dt.get(row,column)  method
-      
-            int dest = packet.getDestinationAddress();
-
-       
-            
-            
+                
             if (myRoutingTable.containsKey(neighbour)) { //als deze al in routingtable is dan update
  
                 MyRoute r1 = myRoutingTable.get(neighbour); //update
@@ -91,8 +93,7 @@ public class MyRoutingProtocol implements IRoutingProtocol {
             	  MyRoute r2 = new MyRoute();
 	              r2.nextHop = neighbour;
 	              r2.cost = linkcost;
-	              myRoutingTable.put(neighbour, r2);
-                
+	              myRoutingTable.put(neighbour, r2); 
             }
             
             if (dtReceive.getNRows() > neighbour) { //update RoutingTable met gegevens van 
@@ -100,21 +101,24 @@ public class MyRoutingProtocol implements IRoutingProtocol {
                 	int costsNeigh = dtReceive.get(neighbour, g);
                 	
                 	if (myRoutingTable.containsKey(g)) {
-                		if (myRoutingTable.get(g).cost > costsNeigh) {
+                		if (myRoutingTable.get(g).cost > costsNeigh + linkcost) { //+ linkcost
                 			myRoutingTable.get(g).cost = costsNeigh + linkcost;
                 			myRoutingTable.get(g).nextHop = neighbour;
                 		}
-                	} else {
+                	} else { //je geeft neighb als next hop terwijl je zelf zou moeten zijn
                 		MyRoute r = new MyRoute();
-                		r.cost = costsNeigh+linkcost;
-                		r.nextHop = neighbour;
-                		myRoutingTable.put(g, r);
+                		if (costsNeigh > 0) { // is dit wel nodig??
+                    		r.cost = costsNeigh+linkcost;
+                    		r.nextHop = neighbour;
+                    		myRoutingTable.put(g, r);
+                		}
+
                 	}
             	}
             }
             
             if (myRoutingTable.containsKey(myAddress)) {
-            	myRoutingTable.remove(myAddress);
+            	myRoutingTable.remove(myAddress); //toevoegen next hop jezelf + cost 0
             }
             
             //Making table met initieel waardes van 100
@@ -133,14 +137,6 @@ public class MyRoutingProtocol implements IRoutingProtocol {
             
             for (Integer n:k) {
             	dtSend.set(myAddress, n, myRoutingTable.get(n).cost); //update dtSend met je eigen kennis 	    	
-            }
-            
-            
-            if (myRoutingTable.containsKey(dest)) {
-         	   MyRoute r = myRoutingTable.get(dest);
-         	   
-                Packet pkt = new Packet(myAddress, r.nextHop, dtSend);
-                this.linkLayer.transmit(pkt);
             }
             
         }
